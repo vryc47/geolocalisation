@@ -10,8 +10,10 @@ import androidx.preference.PreferenceManager;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.nfc.Tag;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -22,18 +24,22 @@ import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.example.geolocalisation.classe.CreateOverlays;
 import com.google.android.material.slider.Slider;
 import com.larswerkman.holocolorpicker.ColorPicker;
 import com.larswerkman.holocolorpicker.ValueBar;
 
 import org.osmdroid.api.IMapController;
 import org.osmdroid.config.Configuration;
+import org.osmdroid.events.MapEventsReceiver;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.MapEventsOverlay;
 import org.osmdroid.views.overlay.Marker;
 import org.osmdroid.views.overlay.MinimapOverlay;
 import org.osmdroid.views.overlay.Polygon;
+import org.osmdroid.views.overlay.Polyline;
 import org.osmdroid.views.overlay.ScaleBarOverlay;
 import org.osmdroid.views.overlay.compass.CompassOverlay;
 import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider;
@@ -55,11 +61,15 @@ public class MainActivity extends AppCompatActivity {
 
     private int coolorSelected;
 
+    private Polyline polyline = new Polyline();
+
     private boolean traceButtonState = false;
-    private float sliderValue;
+    private int sliderValue;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         Context ctx = getApplicationContext();
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
@@ -75,63 +85,39 @@ public class MainActivity extends AppCompatActivity {
         GeoPoint startPoint = new GeoPoint(44.20306d, 0.63012d);
         mapController.setCenter(startPoint);
 
-        MyLocationNewOverlay  locationNewOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(ctx), map);
-        locationNewOverlay.enableMyLocation();
-        map.getOverlays().add(locationNewOverlay);
-
-        CompassOverlay compassOverlay = new CompassOverlay(ctx, new InternalCompassOrientationProvider(ctx), map);
-        compassOverlay.enableCompass();
-        map.getOverlays().add(compassOverlay);
-
-        ScaleBarOverlay scaleBarOverlay;
-        final DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
-        scaleBarOverlay = new ScaleBarOverlay(map);
-        scaleBarOverlay.setCentred(true);
-        scaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);
-        map.getOverlays().add(scaleBarOverlay);
-
-        MinimapOverlay minimapOverlay;
-        minimapOverlay = new MinimapOverlay(ctx, map.getTileRequestCompleteHandler());
-        final DisplayMetrics dm2 = ctx.getResources().getDisplayMetrics();
-        minimapOverlay.setWidth(dm2.widthPixels / 5);
-        minimapOverlay.setHeight(dm2.widthPixels / 5);
-        minimapOverlay.setTileSource(TileSourceFactory.USGS_SAT);
-        map.getOverlays().add(minimapOverlay);
-
-        RotationGestureOverlay RotationGestureOverlay = new RotationGestureOverlay(map);
-        RotationGestureOverlay.setEnabled(true);
-        map.setMultiTouchControls(true);
-        map.getOverlays().add(RotationGestureOverlay);
-
-
-        Marker marker = new Marker(map);
-        marker.setDraggable(false);
-        marker.setIcon(ctx.getDrawable(R.drawable.baseline_location_on_24));
-        marker.setPosition(new GeoPoint(44.20306d, 0.63012d));
-        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
-        MarkerInfoWindow infoWindow = new MarkerInfoWindow(R.layout.poi_description, map);
-        marker.setInfoWindow(infoWindow);
-        marker.setTitle("esiea");
-        marker.setSnippet("Ecole informatique");
-        marker.setSubDescription("156 avenue Jean Jaures");
-        marker.setImage(ctx.getDrawable(R.mipmap.ic_launcher));
-        marker.setInfoWindowAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_TOP);
-        map.getOverlays().add(marker);
-
-        Polygon polygon = new Polygon(map);
-        polygon.getOutlinePaint().setColor(0xFFFF0000);
-        polygon.getFillPaint().setColor(0xFFFF0000);
-        polygon.getFillPaint().setAlpha(75);
-        List <GeoPoint> surface = new ArrayList<>();
-        surface.add(new GeoPoint(44.20332d, 0.63002d));
-        surface.add(new GeoPoint(44.20354d, 0.63026d));
-        surface.add(new GeoPoint(44.20345d, 0.63042d));
-        surface.add(new GeoPoint(44.20323d, 0.63019d));
-        polygon.setPoints(surface);
-        map.getOverlays().add(polygon);
-
+        CreateOverlays overlays = new CreateOverlays(map, ctx);
+        overlays.initializeOnMap();
         this.traceButton =findViewById(R.id.btn_tracer);
 
+
+        map.getOverlays().add(new MapEventsOverlay(new MapEventsReceiver() {
+            @Override
+            public boolean singleTapConfirmedHelper(GeoPoint p) {
+                polyline.setColor(coolorSelected);
+                if(polyline.getPoints().size() > 3 && polyline.getPoints().get(0).distanceToAsDouble(p) < 20.00 ){
+                    Polygon polygon = new Polygon();
+                    polygon.setPoints(polyline.getActualPoints());
+                    map.getOverlays().add(polygon);
+                    overlays.reduceListOverlay(polyline.getActualPoints().size());
+                    polyline.getPoints().clear();
+
+                }
+                else {
+                    polyline.addPoint(p);
+                    overlays.createMarker(ctx, p);
+                    overlays.applyOverlayOnMap(overlays.getAllOverlays().getItems().get(overlays.getAllOverlays().getItems().size()-1));
+                }
+                return true;
+            }
+
+            @Override
+            public boolean longPressHelper(GeoPoint p) {
+
+                //PolygonManager polygonManager = new PolygonManager(map);
+                //polygonManager.onMapLongClick(p);
+                return false;
+            }
+        }));
 
     }
 
@@ -194,6 +180,10 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        getColorPickerValue(layout);
+    }
+
+    private void getColorPickerValue(View layout){
         ColorPicker colorPicker = layout.findViewById(R.id.picker);
         colorPicker.setShowOldCenterColor(false);
         colorPicker.setOnColorChangedListener(new ColorPicker.OnColorChangedListener() {
@@ -204,21 +194,20 @@ public class MainActivity extends AppCompatActivity {
                 txtView.setTextSize(30);
                 txtView.setText("Color selected: " + color);
             }
-        }); 
+        });
     }
-
 
     public void getSliderValue(View view){
         Slider slider = (Slider) findViewById(R.id.slider);
         slider.addOnChangeListener(new Slider.OnChangeListener() {
             @Override
             public void onValueChange(@NonNull Slider slider, float value, boolean fromUser) {
-                sliderValue = value;
+                sliderValue = Math.round(value);
+                Log.d("sliderValue", String.valueOf(sliderValue));
                 TextView txtView = findViewById(R.id.slider_value);
                 txtView.setTextSize(30);
                 txtView.setText("Slider value: " + sliderValue);
             }
         });
     }
-
 }
