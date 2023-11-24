@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Geolocalisation</string>
+    <string name="sous_description">Sous description</string>
+    <string name="description">Description</string>
+    <string name="tracer">Tracer</string>
+    <string name="button">Tracer</string>
+    <string name="location">Tracer</string>
+    <string name="color">color</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+</resources>
